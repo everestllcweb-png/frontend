@@ -75,7 +75,7 @@ export default function Navbar() {
               ) : (
                 <div className="h-10 lg:h-12 w-32 bg-primary/10 rounded-md flex items-center justify-center">
                   <span className="text-primary font-bold text-sm">
-                    {settings?.companyName || "Everest Consultancy"}
+                    {settings?.companyName || "Everest LLC"}
                   </span>
                 </div>
               )}
