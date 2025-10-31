@@ -48,10 +48,10 @@ export function DestinationsSection() {
         {/* Section Header */}
         <div className="text-center mb-12 lg:mb-16">
           <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
-            Study Destinations
+            Working Destinations
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Explore world-class education opportunities in top destinations around the globe
+            Explore opportunities in top destinations around the globe
           </p>
         </div>
 
@@ -109,7 +109,7 @@ export function DestinationsSection() {
                   <div className="flex items-center gap-2 text-xs text-white/80">
                     <GraduationCap className="w-4 h-4" aria-hidden="true" />
                     <span>
-                      {uniCount} {uniCount === 1 ? "University" : "Universities"}
+                      {uniCount} {uniCount === 1 ? "Worker Placed" : "Workers Placed"}
                     </span>
                   </div>
                 </div>
