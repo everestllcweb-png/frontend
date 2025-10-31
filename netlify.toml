@@ -16,3 +16,7 @@
     Access-Control-Allow-Headers = "Content-Type"
     Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
     Access-Control-Allow-Credentials = "true"
+[[redirects]]
+  from = "/api/*"
+  to = "https://backend-5hej.onrender.com/:splat"
+  status = 200
