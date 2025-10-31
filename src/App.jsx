@@ -25,7 +25,7 @@ import Blogs from './pages/admin/Blogs';
 import Reviews from './pages/admin/Reviews';
 import Appointments from './pages/admin/Appointments';
 import Team from './pages/admin/Team';
-
+import {ReviewsSection} from './sections/ReviewsSection'
 import NotFound from './pages/not-found';
 import ProtectedRoute from './auth/ProtectedRoute';
 
@@ -73,6 +73,7 @@ function Router() {
       <Route path="/blogs" component={BlogsPage} />
       <Route path="/about" component={About} />
       <Route path="/other" component={Other} />
+      <Route path="/reviews" component={ReviewsSection} />
       <Route path="/appointment" component={AppointmentPage} />
 
       {/* admin login is public */}
