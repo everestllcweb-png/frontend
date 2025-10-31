@@ -79,10 +79,10 @@ export function ReviewsSection() {
         {/* Section Header */}
         <div className="text-center mb-12 lg:mb-16">
           <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
-            Student Success Stories
+             Success Stories With Reviews
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Hear from students who achieved their dreams with our guidance
+            Hear from our clients who achieved their dreams with our guidance
           </p>
         </div>
 
