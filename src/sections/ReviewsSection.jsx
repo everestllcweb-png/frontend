@@ -1,3 +1,4 @@
+// client/src/components/sections/ReviewsSection.jsx
 import { useQuery } from "@tanstack/react-query";
 import { Star, Quote, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -6,16 +7,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
 const RAW_BASE = import.meta.env.VITE_API_URL || "";
 const API_BASE = RAW_BASE.replace(/\/+$/, "");
-const USE_COOKIES = (import.meta.env.VITE_USE_COOKIES ?? "true") !== "false";
 
-// Fetch helper
+// PUBLIC fetch: no cookies (mobile-safe)
 async function fetchJSON(path) {
   const url = path.startsWith("http")
     ? path
     : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
-  const res = await fetch(url, {
-    credentials: USE_COOKIES ? "include" : "omit",
-  });
+  const res = await fetch(url, { credentials: "omit" });
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status} ${res.statusText} @ ${url}: ${text}`);
@@ -23,50 +21,19 @@ async function fetchJSON(path) {
   return res.json();
 }
 
-// Flexible "is active" checker
-function isActiveReview(r) {
-  if (!r || typeof r !== "object") return false;
-
-  // Common booleans
-  if (typeof r.isActive === "boolean") return r.isActive;
-  if (typeof r.active === "boolean") return r.active;
-  if (typeof r.published === "boolean") return r.published;
-  if (typeof r.isPublished === "boolean") return r.isPublished;
-
-  // Common string statuses
-  const s = String(r.status || "").toLowerCase().trim();
-  if (["active", "approved", "publish", "published", "visible", "enabled"].includes(s)) return true;
-
-  // If none provided, default to visible (so missing flags don't hide content)
-  return true;
-}
-
 export function ReviewsSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const {
-    data: reviews = [],
-    isLoading,
-    isError,
-    error,
-  } = useQuery({
-    queryKey: [API_BASE || "(same-origin)", "/api/reviews", USE_COOKIES ? "withCookies" : "noCookies"],
+  const { data = [], isLoading, isError, error } = useQuery({
+    queryKey: [API_BASE || "(same-origin)", "/api/reviews", "public"],
     queryFn: () => fetchJSON("/api/reviews"),
     staleTime: 60_000,
   });
 
-  // Normalize to array (in case API returns {data:[...]})
-  const list = useMemo(() => {
-    if (Array.isArray(reviews)) return reviews;
-    if (reviews && Array.isArray(reviews.data)) return reviews.data;
-    return [];
-  }, [reviews]);
+  // Always an array (server already normalized)
+  const items = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
-  // Try to show "active"; if none match, show all (fail-safe)
-  const filtered = useMemo(() => list.filter(isActiveReview), [list]);
-  const items = filtered.length > 0 ? filtered : list;
-
-  // Keep index valid
+  // Keep index valid when list length changes
   useEffect(() => {
     const maxStart = Math.max(0, items.length - 3);
     setCurrentIndex((prev) => Math.min(prev, maxStart));
@@ -84,9 +51,6 @@ export function ReviewsSection() {
     );
   }, [items.length]);
 
-  // DEV-only debug counts (helps on mobile)
-  const showDebug = import.meta.env.DEV;
-
   return (
     <section className="py-16 lg:py-24 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -99,17 +63,6 @@ export function ReviewsSection() {
             Hear from our clients who achieved their dreams with our guidance
           </p>
         </div>
-
-        {/* Debug badge */}
-        {showDebug && (
-          <div className="mb-4 inline-flex items-center gap-3 rounded-md border px-3 py-1 text-xs text-muted-foreground">
-            <span>debug:</span>
-            <span>raw={Array.isArray(reviews) ? reviews.length : (reviews?.data?.length ?? 0)}</span>
-            <span>list={list.length}</span>
-            <span>filtered={filtered.length}</span>
-            <span>shown={items.length}</span>
-          </div>
-        )}
 
         {/* Loading */}
         {isLoading && (
@@ -140,10 +93,7 @@ export function ReviewsSection() {
           <div className="relative">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
               {(items.length <= 3 ? items : items.slice(currentIndex, currentIndex + 3)).map((review, idx) => {
-                const key =
-                  review.id ||
-                  review._id ||
-                  `${review.studentName ?? "student"}-${review.university ?? "uni"}-${idx}`;
+                const key = review._id || `${review.studentName ?? "student"}-${idx}`;
                 const rating = Math.max(0, Math.min(5, Number(review.rating || 0)));
                 const initial =
                   (review.studentName && review.studentName.trim().charAt(0).toUpperCase()) || "S";
