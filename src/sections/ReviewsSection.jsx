@@ -1,29 +1,86 @@
+// src/components/sections/ReviewsSection.jsx
 import { useQuery } from "@tanstack/react-query";
 import { Star, Quote, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card } from "../ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
+/* -----------------------
+ * Config
+ * --------------------- */
 const RAW_BASE = import.meta.env.VITE_API_URL || "";
-const API_BASE = RAW_BASE.replace(/\/+$/, "");
-const USE_COOKIES = (import.meta.env.VITE_USE_COOKIES ?? "true") !== "false";
+const API_BASE = RAW_BASE.replace(/\/+$/, ""); // trim trailing slash
 
-// Fetch helper
-async function fetchJSON(path) {
-  const url = path.startsWith("http")
-    ? path
-    : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
-  const res = await fetch(url, {
-    credentials: USE_COOKIES ? "include" : "omit",
-  });
+// Build candidate URLs to try (absolute first if provided, then same-origin)
+const REVIEW_PATH = "/api/reviews";
+const CANDIDATE_URLS = [
+  ...(API_BASE ? [`${API_BASE}${REVIEW_PATH}`] : []),
+  REVIEW_PATH, // same-origin fallback
+];
+
+/* -----------------------
+ * Helpers
+ * --------------------- */
+// Small timeout wrapper so a bad endpoint doesn't hang forever (esp. mobile)
+async function withTimeout(promise, ms = 8000) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await promise(ctrl.signal);
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+// Try to fetch JSON from a (url, credentials) pair
+async function tryFetchJsonOnce(url, credentials) {
+  const doFetch = (signal) =>
+    fetch(url, {
+      signal,
+      credentials, // "omit" or "include"
+    });
+
+  const res = await withTimeout(doFetch);
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
+    const text = (await res.text().catch(() => "")) || res.statusText;
     throw new Error(`${res.status} ${res.statusText} @ ${url}: ${text}`);
   }
   return res.json();
 }
 
-// Flexible "is active" checker
+// Try multiple URLs and both credential modes, in a sensible order
+// 1) absolute + omit, 2) absolute + include, 3) same-origin + omit, 4) same-origin + include
+async function smartFetchReviews() {
+  const tried = [];
+
+  for (const url of CANDIDATE_URLS) {
+    for (const credentials of ["omit", "include"]) {
+      try {
+        const data = await tryFetchJsonOnce(url, credentials);
+        return { data, mode: { url, credentials } };
+      } catch (e) {
+        tried.push({ url, credentials, error: e?.message || String(e) });
+        // keep trying next combination
+      }
+    }
+  }
+
+  const err = new Error(
+    "All attempts to fetch reviews failed:\n" +
+      tried.map((t) => `- [${t.credentials}] ${t.url} -> ${t.error}`).join("\n")
+  );
+  err._attempts = tried;
+  throw err;
+}
+
+// Normalize array shape if API returns { data: [...] } or a plain array
+function toArray(maybe) {
+  if (Array.isArray(maybe)) return maybe;
+  if (maybe && Array.isArray(maybe.data)) return maybe.data;
+  return [];
+}
+
+// Flexible "active" check; defaults to visible if flags are missing
 function isActiveReview(r) {
   if (!r || typeof r !== "object") return false;
 
@@ -33,40 +90,37 @@ function isActiveReview(r) {
   if (typeof r.published === "boolean") return r.published;
   if (typeof r.isPublished === "boolean") return r.isPublished;
 
-  // Common string statuses
+  // String statuses
   const s = String(r.status || "").toLowerCase().trim();
   if (["active", "approved", "publish", "published", "visible", "enabled"].includes(s)) return true;
 
-  // If none provided, default to visible (so missing flags don't hide content)
+  // No explicit flags? Show it (prevents silent empty UI)
   return true;
 }
 
+/* -----------------------
+ * Component
+ * --------------------- */
 export function ReviewsSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Use one query that tries multiple strategies under the hood
   const {
-    data: reviews = [],
+    data,
     isLoading,
     isError,
     error,
   } = useQuery({
-    queryKey: [API_BASE || "(same-origin)", "/api/reviews", USE_COOKIES ? "withCookies" : "noCookies"],
-    queryFn: () => fetchJSON("/api/reviews"),
+    queryKey: ["reviews-smart", CANDIDATE_URLS],
+    queryFn: smartFetchReviews,
     staleTime: 60_000,
   });
 
-  // Normalize to array (in case API returns {data:[...]})
-  const list = useMemo(() => {
-    if (Array.isArray(reviews)) return reviews;
-    if (reviews && Array.isArray(reviews.data)) return reviews.data;
-    return [];
-  }, [reviews]);
+  const raw = useMemo(() => toArray(data?.data), [data]);
+  const filtered = useMemo(() => raw.filter(isActiveReview), [raw]);
+  const items = filtered.length > 0 ? filtered : raw;
 
-  // Try to show "active"; if none match, show all (fail-safe)
-  const filtered = useMemo(() => list.filter(isActiveReview), [list]);
-  const items = filtered.length > 0 ? filtered : list;
-
-  // Keep index valid
+  // Keep index valid when list length changes
   useEffect(() => {
     const maxStart = Math.max(0, items.length - 3);
     setCurrentIndex((prev) => Math.min(prev, maxStart));
@@ -84,7 +138,6 @@ export function ReviewsSection() {
     );
   }, [items.length]);
 
-  // DEV-only debug counts (helps on mobile)
   const showDebug = import.meta.env.DEV;
 
   return (
@@ -100,14 +153,18 @@ export function ReviewsSection() {
           </p>
         </div>
 
-        {/* Debug badge */}
+        {/* Debug */}
         {showDebug && (
-          <div className="mb-4 inline-flex items-center gap-3 rounded-md border px-3 py-1 text-xs text-muted-foreground">
-            <span>debug:</span>
-            <span>raw={Array.isArray(reviews) ? reviews.length : (reviews?.data?.length ?? 0)}</span>
-            <span>list={list.length}</span>
-            <span>filtered={filtered.length}</span>
-            <span>shown={items.length}</span>
+          <div className="mb-4 space-y-1 rounded-md border px-3 py-2 text-xs text-muted-foreground">
+            <div>API_BASE: {API_BASE || "(same-origin)"}</div>
+            {data?.mode && (
+              <div>
+                Using: <code>{data.mode.url}</code> | creds: <code>{data.mode.credentials}</code>
+              </div>
+            )}
+            <div>
+              counts → raw={raw.length} filtered={filtered.length} shown={items.length}
+            </div>
           </div>
         )}
 
@@ -126,7 +183,9 @@ export function ReviewsSection() {
         {isError && (
           <div className="mb-8 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <div className="font-medium">Couldn’t load reviews.</div>
-            <div className="mt-2 break-words opacity-80">{error?.message}</div>
+            <div className="mt-2 break-words opacity-80 whitespace-pre-wrap">
+              {error?.message}
+            </div>
           </div>
         )}
 
@@ -144,9 +203,10 @@ export function ReviewsSection() {
                   review.id ||
                   review._id ||
                   `${review.studentName ?? "student"}-${review.university ?? "uni"}-${idx}`;
-                const rating = Math.max(0, Math.min(5, Number(review.rating || 0)));
+                const rating = Math.max(0, Math.min(5, Number(review.rating ?? review.stars ?? 0)));
+                const displayName = review.studentName || review.name || "Student";
                 const initial =
-                  (review.studentName && review.studentName.trim().charAt(0).toUpperCase()) || "S";
+                  (displayName && displayName.trim().charAt(0).toUpperCase()) || "S";
 
                 return (
                   <Card
@@ -167,18 +227,18 @@ export function ReviewsSection() {
                       </div>
                     </div>
 
-                    {review.testimonial && (
+                    {review.testimonial || review.comment ? (
                       <p className="text-base text-foreground mb-6 leading-relaxed line-clamp-4">
-                        “{review.testimonial}”
+                        “{review.testimonial || review.comment}”
                       </p>
-                    )}
+                    ) : null}
 
                     <div className="flex items-center gap-3 pt-4 border-t">
                       <Avatar>
                         {review.imageUrl ? (
                           <AvatarImage
                             src={review.imageUrl}
-                            alt={review.studentName || "Student"}
+                            alt={displayName}
                             loading="lazy"
                             decoding="async"
                           />
@@ -189,7 +249,7 @@ export function ReviewsSection() {
                       </Avatar>
                       <div>
                         <p className="font-semibold text-foreground">
-                          {review.studentName || "Student"}
+                          {displayName}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {review.university}
