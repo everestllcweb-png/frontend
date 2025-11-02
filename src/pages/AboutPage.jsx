@@ -193,7 +193,7 @@ export default function AboutPage() {
                 Meet Our Team
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                The people behind our students’ success
+                The people behind our success
               </p>
             </div>
 
