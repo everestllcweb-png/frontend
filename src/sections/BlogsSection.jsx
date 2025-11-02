@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, User, ArrowRight } from "lucide-react";
+import { Calendar, User, ArrowRight, X } from "lucide-react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Link } from "wouter";
+import { useMemo, useState, useCallback } from "react";
 
 // ✅ Base API URL from environment (.env)
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -30,21 +32,72 @@ async function fetchJSON(path) {
   return res.json();
 }
 
+// Try /api/blogs/:slug first, then /api/blogs/id/:id
+async function fetchBlogDetail({ slug, id }) {
+  if (slug) {
+    try {
+      return await fetchJSON(`/api/blogs/${slug}`);
+    } catch {
+      // continue to id fallback
+    }
+  }
+  if (id) {
+    return await fetchJSON(`/api/blogs/id/${id}`);
+  }
+  // If your API returns the full blog in list already, just return null to use the list item.
+  return null;
+}
+
 export function BlogsSection() {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selected, setSelected] = useState(null); // { slug?, id? , fallbackItem? }
+
   const { data: blogs = [], isLoading } = useQuery({
     queryKey: [API_BASE, "/api/blogs"],
     queryFn: () => fetchJSON("/api/blogs"),
     staleTime: 60_000,
   });
 
-  const publishedBlogs = (blogs || [])
-    .filter((blog) => blog && blog.isPublished)
-    .sort((a, b) => {
-      const dateA = a?.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-      const dateB = b?.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-      return dateB - dateA;
-    })
-    .slice(0, 3);
+  const publishedBlogs = useMemo(
+    () =>
+      (blogs || [])
+        .filter((blog) => blog && blog.isPublished)
+        .sort((a, b) => {
+          const dateA = a?.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+          const dateB = b?.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+          return dateB - dateA;
+        })
+        .slice(0, 3),
+    [blogs]
+  );
+
+  const openModal = useCallback((blog) => {
+    const id = blog?.id || blog?._id || undefined;
+    const slug = blog?.slug || undefined;
+    setSelected({ id, slug, fallbackItem: blog });
+    setModalOpen(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    // keep selection so reopening is quick; clear if you prefer:
+    // setSelected(null)
+  }, []);
+
+  // Fetch the full blog only when the dialog is open and we have an identifier
+  const {
+    data: detail,
+    isLoading: detailLoading,
+    isError: detailError,
+  } = useQuery({
+    queryKey: [API_BASE, "blog-detail", selected?.slug || selected?.id],
+    queryFn: () => fetchBlogDetail({ slug: selected?.slug, id: selected?.id }),
+    enabled: modalOpen && !!(selected?.slug || selected?.id),
+    staleTime: 60_000,
+  });
+
+  const activeBlog = detail || selected?.fallbackItem || null;
+  const activeDate = formatDate(activeBlog?.publishedAt);
 
   if (isLoading) {
     return (
@@ -86,10 +139,7 @@ export function BlogsSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
           {publishedBlogs.map((blog, idx) => {
             const key =
-              blog.id ||
-              blog._id ||
-              blog.slug ||
-              `${blog.title ?? "blog"}-${idx}`;
+              blog.id || blog._id || blog.slug || `${blog.title ?? "blog"}-${idx}`;
             const displayDate = formatDate(blog.publishedAt);
 
             return (
@@ -156,14 +206,16 @@ export function BlogsSection() {
                       </div>
                     )}
 
-                    <Link
-                      href={`/blogs/${blog.slug ?? key}`}
-                      className="text-sm text-primary hover:underline flex items-center gap-1"
-                      data-testid={`link-read-more-${key}`}
+                    {/* OPEN OVERLAY */}
+                    <button
+                      onClick={() => openModal(blog)}
+                      className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                      data-testid={`button-read-more-${key}`}
+                      type="button"
                     >
                       Read More
                       <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </Card>
@@ -171,7 +223,7 @@ export function BlogsSection() {
           })}
         </div>
 
-        {/* View All CTA (valid HTML: Button renders <a> via asChild) */}
+        {/* View All CTA */}
         <div className="text-center mt-12">
           <Button
             size="lg"
@@ -184,6 +236,110 @@ export function BlogsSection() {
           </Button>
         </div>
       </div>
+
+      {/* Dialog Overlay for Blog Detail */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent
+          className="max-w-3xl w-[92vw] p-0 overflow-hidden"
+          aria-describedby={undefined}
+        >
+          {/* Top Bar: Title + Close */}
+          <DialogHeader className="p-4 border-b flex flex-row items-center justify-between">
+            <DialogTitle className="text-base font-semibold">
+              {activeBlog?.title || "Article"}
+            </DialogTitle>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Close"
+              onClick={closeModal}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </DialogHeader>
+
+          {/* Body */}
+          <div className="max-h-[70vh] overflow-y-auto">
+            {/* Hero image */}
+            {activeBlog?.imageUrl && (
+              <div className="h-56 w-full overflow-hidden bg-muted">
+                <img
+                  src={activeBlog.imageUrl}
+                  alt={activeBlog?.title || "Blog image"}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+            )}
+
+            <div className="p-5 md:p-6 space-y-4">
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                {activeBlog?.category ? (
+                  <Badge variant="secondary">{activeBlog.category}</Badge>
+                ) : null}
+                {activeDate && (
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    {activeDate}
+                  </span>
+                )}
+                {activeBlog?.author && (
+                  <span className="inline-flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    {activeBlog.author}
+                  </span>
+                )}
+              </div>
+
+              {/* Loading / Error / Content */}
+              {detailLoading ? (
+                <div className="space-y-3">
+                  <div className="h-4 bg-muted rounded md:w-2/3 animate-pulse" />
+                  <div className="h-4 bg-muted rounded animate-pulse" />
+                  <div className="h-4 bg-muted rounded md:w-5/6 animate-pulse" />
+                  <div className="h-4 bg-muted rounded md:w-4/6 animate-pulse" />
+                </div>
+              ) : detailError ? (
+                <div className="text-sm text-destructive">
+                  Couldn’t load the full article. You can still read it on the article page.
+                </div>
+              ) : (
+                <>
+                  {activeBlog?.content ? (
+                    <article
+                      className="prose prose-sm md:prose-base max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{ __html: activeBlog.content }}
+                    />
+                  ) : activeBlog?.body ? (
+                    <article className="prose prose-sm md:prose-base max-w-none dark:prose-invert whitespace-pre-line">
+                      {activeBlog.body}
+                    </article>
+                  ) : activeBlog?.excerpt ? (
+                    <article className="prose prose-sm md:prose-base max-w-none dark:prose-invert whitespace-pre-line">
+                      {activeBlog.excerpt}
+                    </article>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No content provided for this article.
+                    </p>
+                  )}
+                </>
+              )}
+
+              {/* Go to full page */}
+              <div className="pt-2">
+                <Button asChild variant="link" className="px-0">
+                  <Link href={`/blogs/${selected?.slug ?? selected?.id ?? ""}`}>
+                    Open full article page
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
