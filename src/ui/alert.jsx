@@ -16,7 +16,7 @@ const alertVariants = cva(
 )
 
 const Alert = React.forwardRef & VariantProps<typeof alertVariants>
->(({ className, variant, ...props }, ref) => (
+(({ className, variant, ...props }, ref) => (
   <div
     ref={ref}
     role="alert"
