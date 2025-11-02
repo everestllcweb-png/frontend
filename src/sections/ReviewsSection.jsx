@@ -1,30 +1,44 @@
-// src/components/sections/ReviewsSection.jsx
 import { useQuery } from "@tanstack/react-query";
 import { Star, Quote, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card } from "../ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
-// ---- Config ----
 const RAW_BASE = import.meta.env.VITE_API_URL || "";
-const API_BASE = RAW_BASE.replace(/\/+$/, ""); // trim trailing /
-const USE_COOKIES = (import.meta.env.VITE_USE_COOKIES ?? "true") !== "false"; // default true
+const API_BASE = RAW_BASE.replace(/\/+$/, "");
+const USE_COOKIES = (import.meta.env.VITE_USE_COOKIES ?? "true") !== "false";
 
-// ---- Fetch helper with credentials + readable errors ----
+// Fetch helper
 async function fetchJSON(path) {
   const url = path.startsWith("http")
     ? path
     : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
-
   const res = await fetch(url, {
     credentials: USE_COOKIES ? "include" : "omit",
   });
-
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status} ${res.statusText} @ ${url}: ${text}`);
   }
   return res.json();
+}
+
+// Flexible "is active" checker
+function isActiveReview(r) {
+  if (!r || typeof r !== "object") return false;
+
+  // Common booleans
+  if (typeof r.isActive === "boolean") return r.isActive;
+  if (typeof r.active === "boolean") return r.active;
+  if (typeof r.published === "boolean") return r.published;
+  if (typeof r.isPublished === "boolean") return r.isPublished;
+
+  // Common string statuses
+  const s = String(r.status || "").toLowerCase().trim();
+  if (["active", "approved", "publish", "published", "visible", "enabled"].includes(s)) return true;
+
+  // If none provided, default to visible (so missing flags don't hide content)
+  return true;
 }
 
 export function ReviewsSection() {
@@ -41,30 +55,38 @@ export function ReviewsSection() {
     staleTime: 60_000,
   });
 
-  const activeReviews = useMemo(
-    () => (reviews || []).filter((r) => r && r.isActive),
-    [reviews]
-  );
+  // Normalize to array (in case API returns {data:[...]})
+  const list = useMemo(() => {
+    if (Array.isArray(reviews)) return reviews;
+    if (reviews && Array.isArray(reviews.data)) return reviews.data;
+    return [];
+  }, [reviews]);
 
-  // keep index valid when list length changes
+  // Try to show "active"; if none match, show all (fail-safe)
+  const filtered = useMemo(() => list.filter(isActiveReview), [list]);
+  const items = filtered.length > 0 ? filtered : list;
+
+  // Keep index valid
   useEffect(() => {
-    const maxStart = Math.max(0, activeReviews.length - 3);
+    const maxStart = Math.max(0, items.length - 3);
     setCurrentIndex((prev) => Math.min(prev, maxStart));
-  }, [activeReviews.length]);
+  }, [items.length]);
 
   const goToPrevious = useCallback(() => {
     setCurrentIndex((prev) =>
-      prev === 0 ? Math.max(0, activeReviews.length - 3) : prev - 1
+      prev === 0 ? Math.max(0, items.length - 3) : prev - 1
     );
-  }, [activeReviews.length]);
+  }, [items.length]);
 
   const goToNext = useCallback(() => {
     setCurrentIndex((prev) =>
-      Math.min(prev + 1, Math.max(0, activeReviews.length - 3))
+      Math.min(prev + 1, Math.max(0, items.length - 3))
     );
-  }, [activeReviews.length]);
+  }, [items.length]);
 
-  // --- UI ---
+  // DEV-only debug counts (helps on mobile)
+  const showDebug = import.meta.env.DEV;
+
   return (
     <section className="py-16 lg:py-24 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -78,6 +100,17 @@ export function ReviewsSection() {
           </p>
         </div>
 
+        {/* Debug badge */}
+        {showDebug && (
+          <div className="mb-4 inline-flex items-center gap-3 rounded-md border px-3 py-1 text-xs text-muted-foreground">
+            <span>debug:</span>
+            <span>raw={Array.isArray(reviews) ? reviews.length : (reviews?.data?.length ?? 0)}</span>
+            <span>list={list.length}</span>
+            <span>filtered={filtered.length}</span>
+            <span>shown={items.length}</span>
+          </div>
+        )}
+
         {/* Loading */}
         {isLoading && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -89,32 +122,24 @@ export function ReviewsSection() {
           </div>
         )}
 
-        {/* Error (visible on mobile too) */}
+        {/* Error */}
         {isError && (
           <div className="mb-8 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
-            <div className="font-medium">Couldn’t load reviews on this device.</div>
+            <div className="font-medium">Couldn’t load reviews.</div>
             <div className="mt-2 break-words opacity-80">{error?.message}</div>
-            <div className="mt-2 text-xs opacity-70">
-              Tip: Ensure API is HTTPS, cookies use <code>SameSite=None; Secure</code>,
-              and CORS has exact <code>Access-Control-Allow-Origin</code> +{" "}
-              <code>Access-Control-Allow-Credentials: true</code>.
-            </div>
           </div>
         )}
 
         {/* Empty */}
-        {!isLoading && !isError && activeReviews.length === 0 && (
+        {!isLoading && !isError && items.length === 0 && (
           <div className="text-sm text-muted-foreground">No reviews yet.</div>
         )}
 
         {/* Grid + Controls */}
-        {!isLoading && !isError && activeReviews.length > 0 && (
+        {!isLoading && !isError && items.length > 0 && (
           <div className="relative">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-              {(activeReviews.length <= 3
-                ? activeReviews
-                : activeReviews.slice(currentIndex, currentIndex + 3)
-              ).map((review, idx) => {
+              {(items.length <= 3 ? items : items.slice(currentIndex, currentIndex + 3)).map((review, idx) => {
                 const key =
                   review.id ||
                   review._id ||
@@ -129,30 +154,25 @@ export function ReviewsSection() {
                     className="p-6 transition-all duration-300 hover:shadow-lg"
                     data-testid={`card-review-${key}`}
                   >
-                    {/* Quote + Rating */}
                     <div className="flex items-center justify-between mb-4">
                       <Quote className="w-8 h-8 text-primary/20" aria-hidden="true" />
                       <div className="flex gap-1" aria-label={`Rating: ${rating} out of 5`}>
                         {Array.from({ length: 5 }).map((_, i) => (
                           <Star
                             key={i}
-                            className={`w-4 h-4 ${
-                              i < rating ? "text-primary fill-primary" : "text-muted-foreground/40"
-                            }`}
+                            className={`w-4 h-4 ${i < rating ? "text-primary fill-primary" : "text-muted-foreground/40"}`}
                             aria-hidden="true"
                           />
                         ))}
                       </div>
                     </div>
 
-                    {/* Testimonial */}
                     {review.testimonial && (
                       <p className="text-base text-foreground mb-6 leading-relaxed line-clamp-4">
                         “{review.testimonial}”
                       </p>
                     )}
 
-                    {/* Student */}
                     <div className="flex items-center gap-3 pt-4 border-t">
                       <Avatar>
                         {review.imageUrl ? (
@@ -168,7 +188,7 @@ export function ReviewsSection() {
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-semibold text-foreground" data-testid={`text-student-name-${key}`}>
+                        <p className="font-semibold text-foreground">
                           {review.studentName || "Student"}
                         </p>
                         <p className="text-sm text-muted-foreground">
@@ -182,24 +202,21 @@ export function ReviewsSection() {
               })}
             </div>
 
-            {/* Arrows */}
-            {activeReviews.length > 3 && (
+            {items.length > 3 && (
               <div className="flex justify-center gap-4 mt-8">
                 <button
                   onClick={goToPrevious}
                   disabled={currentIndex === 0}
                   className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-card border shadow-md hover:bg-accent active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Previous reviews"
-                  data-testid="button-reviews-prev"
                 >
                   <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
                 </button>
                 <button
                   onClick={goToNext}
-                  disabled={currentIndex >= activeReviews.length - 3}
+                  disabled={currentIndex >= items.length - 3}
                   className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-card border shadow-md hover:bg-accent active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                   aria-label="Next reviews"
-                  data-testid="button-reviews-next"
                 >
                   <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
                 </button>
