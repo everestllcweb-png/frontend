@@ -255,7 +255,7 @@ export function BlogsSection() {
               aria-label="Close"
               onClick={closeModal}
             >
-              <X className="h-5 w-5" />
+              {/* <X className="h-5 w-5" /> */}
             </Button>
           </DialogHeader>
 
