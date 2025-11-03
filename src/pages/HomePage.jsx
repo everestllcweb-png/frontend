@@ -19,11 +19,11 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main>
-        <UniversitiesSection />
         <AboutSection />
-        <DestinationsSection />
         <CoursesSection />
+        <DestinationsSection />
         <ReviewsSection />
+        <UniversitiesSection />
         <BlogsSection />
       </main>
 
