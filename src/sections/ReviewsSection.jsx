@@ -220,7 +220,7 @@ export function ReviewsSection() {
                         {Array.from({ length: 5 }).map((_, i) => (
                           <Star
                             key={i}
-                            className={`w-4 h-4 ${i < rating ? "text-primary fill-primary" : "text-muted-foreground/40"}`}
+                            className={`w-4 h-4 ${i < rating ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/40"}`}
                             aria-hidden="true"
                           />
                         ))}
