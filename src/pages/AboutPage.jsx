@@ -161,7 +161,7 @@ export default function AboutPage() {
                   </p>
                 </div>
               </div>
-              {/* <div>
+              <div>
                 <img
                   src={storyImage}
                   alt="Our team / Company visual"
@@ -171,7 +171,7 @@ export default function AboutPage() {
                   decoding="async"
                   sizes="(min-width: 1024px) 800px, 100vw"
                 />
-              </div> */}
+              </div>
             </div>
           </div>
         </section>
