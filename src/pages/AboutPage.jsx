@@ -8,10 +8,14 @@ import { useMemo } from "react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-// Small helper
-async function fetchJSON(path) {
+// Auto-compress Cloudinary images; no-op for others
+const transformCdn = (url, t = "f_auto,q_auto,dpr_auto,w_1200") =>
+  url && url.includes("/upload/") ? url.replace("/upload/", `/upload/${t}/`) : url;
+
+// Small helpers (public endpoints → no cookies to reduce preflights)
+async function fetchJSON(path, { signal } = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { signal, credentials: "omit" });
   if (!res.ok) {
     const t = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${t}`);
@@ -51,8 +55,19 @@ export default function AboutPage() {
   // Team — public list (active only)
   const { data: team = [], isLoading: teamLoading } = useQuery({
     queryKey: [API_BASE, "/api/team"],
-    queryFn: () => fetchJSON("/api/team"),
+    queryFn: ({ signal }) => fetchJSON("/api/team", { signal }),
     staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+
+  // Settings — to get logoUrl for the big image
+  const { data: settings } = useQuery({
+    queryKey: [API_BASE, "/api/settings"],
+    queryFn: ({ signal }) => fetchJSON("/api/settings", { signal }),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const sortedTeam = useMemo(() => {
@@ -65,6 +80,12 @@ export default function AboutPage() {
       return tb - ta; // newest last if same order
     });
   }, [team]);
+
+  // Prefer backend logo; fallback to your current static image
+  const storyImageRaw =
+    settings?.logoUrl?.trim() ||
+    "https://commission.europa.eu/sites/default/files/styles/oe_theme_medium_no_crop/public/2022-07/photos-for-europa-page_hr-strategy_03.jpg?itok=RCbYpSRU";
+  const storyImage = transformCdn(storyImageRaw, "f_auto,q_auto,dpr_auto,w_1200");
 
   return (
     <div className="min-h-screen bg-background">
@@ -140,14 +161,17 @@ export default function AboutPage() {
                   </p>
                 </div>
               </div>
-              <div>
+              {/* <div>
                 <img
-                  src="https://commission.europa.eu/sites/default/files/styles/oe_theme_medium_no_crop/public/2022-07/photos-for-europa-page_hr-strategy_03.jpg?itok=RCbYpSRU"
-                  alt="Our team"
+                  src={storyImage}
+                  alt="Our team / Company visual"
                   className="w-full h-[400px] object-cover rounded-md"
                   data-testid="img-our-story"
+                  loading="lazy"
+                  decoding="async"
+                  sizes="(min-width: 1024px) 800px, 100vw"
                 />
-              </div>
+              </div> */}
             </div>
           </div>
         </section>
@@ -215,34 +239,28 @@ export default function AboutPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {sortedTeam.map((member) => {
                   const key = member._id || member.id || member.name;
-                  const initial = (member.name || "?")
-                    .trim()
-                    .charAt(0)
-                    .toUpperCase();
+                  const initial = (member.name || "?").trim().charAt(0).toUpperCase();
+                  const img = transformCdn(member.imageUrl, "f_auto,q_auto,dpr_auto,w_600");
                   return (
-                    <Card
-                      key={key}
-                      className="p-6 text-center hover-elevate transition-all"
-                    >
+                    <Card key={key} className="p-6 text-center hover-elevate transition-all">
                       <div className="flex items-center justify-center mb-4">
-                        {member.imageUrl ? (
+                        {img ? (
                           <img
-                            src={member.imageUrl}
+                            src={img}
                             alt={member.name}
                             className="w-24 h-24 rounded-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            sizes="120px"
                           />
                         ) : (
                           <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center">
-                            <span className="text-2xl font-semibold text-primary">
-                              {initial}
-                            </span>
+                            <span className="text-2xl font-semibold text-primary">{initial}</span>
                           </div>
                         )}
                       </div>
                       <div className="text-lg font-semibold">{member.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {member.position}
-                      </div>
+                      <div className="text-sm text-muted-foreground">{member.position}</div>
                     </Card>
                   );
                 })}

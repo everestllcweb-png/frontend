@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminLayout } from "../../admin/AdminLayout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "../../ui/card";
@@ -9,7 +9,59 @@ import { Textarea } from "../../ui/textarea";
 import { useToast } from "../../hooks/use-toast";
 import { apiRequest } from "../../lib/queryClient";
 import { useForm } from "react-hook-form";
-import { Loader2 } from "lucide-react";
+import { Loader2, Image as ImageIcon } from "lucide-react";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "";
+
+/** Cloudinary helpers */
+const transformLogo = (url) =>
+  url && url.includes("/upload/")
+    ? url.replace("/upload/", "/upload/f_auto,q_auto,dpr_auto,w_600/")
+    : url;
+
+async function getSignature(folder = "settings") {
+  const res = await apiRequest("POST", `${API_BASE}/api/cloudinary/signature`, { folder });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json(); // { apiKey, signature, timestamp, folder }
+}
+
+async function uploadToCloudinary({ file, onProgress, folder = "settings" }) {
+  if (!CLOUD_NAME) throw new Error("Missing VITE_CLOUDINARY_CLOUD_NAME");
+  const { timestamp, signature, apiKey } = await getSignature(folder);
+
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("api_key", apiKey);
+  fd.append("timestamp", String(timestamp));
+  fd.append("signature", signature);
+  fd.append("folder", folder);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`;
+  const xhr = new XMLHttpRequest();
+
+  const p = new Promise((resolve, reject) => {
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && typeof onProgress === "function") {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 4) {
+        try {
+          if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+          else reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
+        } catch (err) {
+          reject(err);
+        }
+      }
+    };
+    xhr.open("POST", endpoint, true);
+    xhr.send(fd);
+  });
+
+  return p; // { secure_url, ... }
+}
 
 export default function Settings() {
   const { toast } = useToast();
@@ -17,9 +69,9 @@ export default function Settings() {
 
   // ---- AUTH CHECK (so we don't silently 401 on save) ----
   const { data: auth } = useQuery({
-    queryKey: ["/api/auth/check"],
+    queryKey: [API_BASE, "/api/auth/check"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/auth/check");
+      const res = await apiRequest("GET", `${API_BASE}/api/auth/check`);
       return res.json();
     },
     staleTime: 0,
@@ -32,9 +84,9 @@ export default function Settings() {
     isError,
     error,
   } = useQuery({
-    queryKey: ["/api/settings"],
+    queryKey: [API_BASE, "/api/settings"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/settings");
+      const res = await apiRequest("GET", `${API_BASE}/api/settings`);
       return res.json();
     },
   });
@@ -44,6 +96,8 @@ export default function Settings() {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm({
     defaultValues: {
@@ -61,19 +115,28 @@ export default function Settings() {
     },
   });
 
+  // Logo upload local state
+  const [fileObj, setFileObj] = useState(null);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileRef = useRef(null);
+  const logoUrl = watch("logoUrl");
+
   useEffect(() => {
-    if (settings) reset(settings);
+    if (settings) {
+      reset(settings);
+    }
   }, [settings, reset]);
 
   // ---- UPDATE MUTATION ----
   const updateSettings = useMutation({
     mutationFn: async (data) => {
-      const res = await apiRequest("PUT", "/api/settings", data);
+      const res = await apiRequest("PUT", `${API_BASE}/api/settings`, data);
       // Some servers may return empty; normalize to object
       return res.json().catch(() => ({}));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      queryClient.invalidateQueries({ queryKey: [API_BASE, "/api/settings"] });
       toast({ title: "Success", description: "Settings updated successfully" });
     },
     onError: (err) => {
@@ -96,6 +159,28 @@ export default function Settings() {
     }
     updateSettings.mutate(data);
   };
+
+  async function handleUploadLogo() {
+    if (!fileObj) {
+      toast({ title: "No file selected", description: "Choose a logo first.", variant: "destructive" });
+      return;
+    }
+    try {
+      setIsUploading(true);
+      setUploadPct(0);
+      const result = await uploadToCloudinary({
+        file: fileObj,
+        onProgress: setUploadPct,
+        folder: "settings",
+      });
+      setValue("logoUrl", result.secure_url, { shouldDirty: true, shouldValidate: true });
+      toast({ title: "Uploaded", description: "Logo uploaded to Cloudinary" });
+    } catch (err) {
+      toast({ title: "Upload failed", description: err?.message || "Could not upload logo", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -133,24 +218,72 @@ export default function Settings() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl space-y-8">
           {/* Company Information */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-6">Company Information</h2>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="companyName">Company Name *</Label>
-                <Input id="companyName" {...register("companyName", { required: true })} className="mt-2" />
-                {errors.companyName && <p className="text-sm text-red-600 mt-1">Required</p>}
+          <Card className="p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-foreground">Company Information</h2>
+
+            <div>
+              <Label htmlFor="companyName">Company Name *</Label>
+              <Input id="companyName" {...register("companyName", { required: true })} className="mt-2" />
+              {errors.companyName && <p className="text-sm text-red-600 mt-1">Required</p>}
+            </div>
+
+            <div>
+              <Label htmlFor="footerDescription">Footer Description *</Label>
+              <Textarea id="footerDescription" {...register("footerDescription", { required: true })} rows={4} className="mt-2" />
+              {errors.footerDescription && <p className="text-sm text-red-600 mt-1">Required</p>}
+            </div>
+
+            {/* Logo uploader + manual URL */}
+            <div className="space-y-2">
+              <Label>Logo</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  ref={fileRef}
+                  onChange={(e) => setFileObj(e.target.files?.[0] || null)}
+                />
+                <Button type="button" variant="secondary" onClick={handleUploadLogo} disabled={!fileObj || isUploading}>
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading…
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="w-4 h-4 mr-2" /> Upload to Cloudinary
+                    </>
+                  )}
+                </Button>
               </div>
 
-              <div>
-                <Label htmlFor="footerDescription">Footer Description *</Label>
-                <Textarea id="footerDescription" {...register("footerDescription", { required: true })} rows={4} className="mt-2" />
-                {errors.footerDescription && <p className="text-sm text-red-600 mt-1">Required</p>}
-              </div>
+              {isUploading && (
+                <div className="w-full h-2 bg-muted rounded">
+                  <div className="h-2 bg-primary rounded transition-all" style={{ width: `${uploadPct}%` }} />
+                </div>
+              )}
+
+              {logoUrl && (
+                <div className="mt-2">
+                  <img
+                    className="max-h-28 object-contain"
+                    alt="Logo preview"
+                    src={transformLogo(logoUrl)}
+                    loading="eager"
+                    decoding="async"
+                    sizes="40vw"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 break-all">{logoUrl}</p>
+                </div>
+              )}
 
               <div>
-                <Label htmlFor="logoUrl">Logo URL</Label>
-                <Input id="logoUrl" {...register("logoUrl")} placeholder="https://example.com/logo.png" className="mt-2" />
+                <Label htmlFor="logoUrl" className="text-xs">Or paste logo URL</Label>
+                <Input
+                  id="logoUrl"
+                  placeholder="https://example.com/logo.png"
+                  className="mt-1"
+                  {...register("logoUrl")}
+                />
                 <p className="text-sm text-muted-foreground mt-1">Enter the URL of your logo image</p>
               </div>
             </div>
@@ -204,7 +337,13 @@ export default function Settings() {
 
           <div className="flex justify-end">
             <Button type="submit" size="lg" disabled={updateSettings.isPending}>
-              {updateSettings.isPending ? (<><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>) : "Save Settings"}
+              {updateSettings.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...
+                </>
+              ) : (
+                "Save Settings"
+              )}
             </Button>
           </div>
         </form>
