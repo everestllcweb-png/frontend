@@ -8,6 +8,7 @@ import { BlogsSection } from "../sections/BlogsSection";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 
+
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
@@ -19,6 +20,7 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main>
+        
         <AboutSection />
         <CoursesSection />
         <DestinationsSection />

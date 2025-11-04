@@ -29,6 +29,9 @@ import {ReviewsSection} from './sections/ReviewsSection'
 import NotFound from './pages/not-found';
 import ProtectedRoute from './auth/ProtectedRoute';
 
+
+
+
 // Small wrappers so Wouter can pass a component
 const DashboardPage = () => (
   <ProtectedRoute><AdminDashboard /></ProtectedRoute>
@@ -100,8 +103,9 @@ function Router() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+   
       <Router />
- 
+
       <Toaster />
     </QueryClientProvider>
   );

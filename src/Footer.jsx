@@ -1,16 +1,16 @@
+// src/Footer.jsx
 import { Link } from "wouter";
-import { useEffect, useRef } from "react";
+import { useMemo } from "react";
 import { Facebook, Instagram, Phone, Mail, MapPin, MessageCircle } from "lucide-react";
 import { SiTiktok } from "react-icons/si";
 import { useQuery } from "@tanstack/react-query";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const FB_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
 
-// Fetch app settings
-async function fetchJSON(path) {
+// Public GET → omit credentials to avoid preflights
+async function fetchJSON(path, { signal } = {}) {
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { signal, credentials: "omit" });
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
@@ -21,28 +21,34 @@ async function fetchJSON(path) {
 export default function Footer() {
   const { data: settings } = useQuery({
     queryKey: [API_BASE, "/api/settings"],
-    queryFn: () => fetchJSON("/api/settings"),
-    staleTime: 60_000,
+    queryFn: ({ signal }) => fetchJSON("/api/settings", { signal }),
+    staleTime: 5 * 60 * 1000,
+    cacheTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
-  const fbRef = useRef(null);
+  const facebookUrl = useMemo(
+    () => (settings?.facebookUrl ? String(settings.facebookUrl).trim() : ""),
+    [settings?.facebookUrl]
+  );
 
-  // Load FB SDK (with env APP ID)
-  useEffect(() => {
-    if (window.FB) return;
-    const script = document.createElement("script");
-    script.src = `https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v24.0&appId=${FB_APP_ID}`;
-    script.async = true;
-    script.defer = true;
-    document.body.appendChild(script);
-  }, []);
-
-  // Re-render FB widget when settings load
-  useEffect(() => {
-    if (window.FB && fbRef.current) {
-      window.FB.XFBML.parse(fbRef.current);
-    }
-  }, [settings?.facebookUrl]);
+  // Build the official iframe Page Plugin URL (no SDK required)
+  const fbIframeSrc = useMemo(() => {
+    if (!facebookUrl) return "";
+    const params = new URLSearchParams({
+      href: facebookUrl,
+      tabs: "timeline",
+      width: "380",
+      height: "480",
+      small_header: "false",
+      adapt_container_width: "true",
+      hide_cover: "false",
+      show_facepile: "true",
+      lazy: "true",
+    });
+    return `https://www.facebook.com/plugins/page.php?${params.toString()}`;
+  }, [facebookUrl]);
 
   const quickLinks = [
     { name: "About", path: "/about" },
@@ -53,13 +59,17 @@ export default function Footer() {
   return (
     <footer className="bg-card border-t mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
-
           {/* Company Info */}
           <div className="space-y-4">
             {settings?.logoUrl && (
-              <img src={settings.logoUrl} alt="Logo" className="h-12 w-auto object-contain" />
+              <img
+                src={settings.logoUrl}
+                alt="Logo"
+                className="h-12 w-auto object-contain"
+                loading="lazy"
+                decoding="async"
+              />
             )}
 
             <h3 className="text-xl font-semibold text-foreground">
@@ -74,22 +84,46 @@ export default function Footer() {
             {/* Social Icons */}
             <div className="flex gap-3 pt-2">
               {settings?.facebookUrl && (
-                <a href={settings.facebookUrl} target="_blank" className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition">
+                <a
+                  href={settings.facebookUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition"
+                  aria-label="Facebook"
+                >
                   <Facebook className="w-5 h-5" />
                 </a>
               )}
               {settings?.instagramUrl && (
-                <a href={settings.instagramUrl} target="_blank" className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition">
+                <a
+                  href={settings.instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition"
+                  aria-label="Instagram"
+                >
                   <Instagram className="w-5 h-5" />
                 </a>
               )}
               {settings?.tiktokUrl && (
-                <a href={settings.tiktokUrl} target="_blank" className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition">
+                <a
+                  href={settings.tiktokUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition"
+                  aria-label="TikTok"
+                >
                   <SiTiktok className="w-4 h-4" />
                 </a>
               )}
               {settings?.whatsappUrl && (
-                <a href={settings.whatsappUrl} target="_blank" className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition">
+                <a
+                  href={settings.whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:text-primary transition"
+                  aria-label="WhatsApp"
+                >
                   <MessageCircle className="w-5 h-5" />
                 </a>
               )}
@@ -100,13 +134,14 @@ export default function Footer() {
           <div>
             <h4 className="text-base font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2">
-              {quickLinks.map(link => (
+              {quickLinks.map((link) => (
                 <li key={link.path}>
-                  <Link href={link.path}>
-                    <a className="text-sm text-muted-foreground hover:text-primary transition inline-flex items-center gap-2">
-                      <span className="h-1.5 w-1.5 bg-primary/70 rounded-full"></span>
-                      {link.name}
-                    </a>
+                  <Link
+                    href={link.path}
+                    className="text-sm text-muted-foreground hover:text-primary transition inline-flex items-center gap-2"
+                  >
+                    <span className="h-1.5 w-1.5 bg-primary/70 rounded-full" />
+                    {link.name}
                   </Link>
                 </li>
               ))}
@@ -120,19 +155,25 @@ export default function Footer() {
               {settings?.email && (
                 <li className="flex gap-2">
                   <Mail className="w-4 h-4 text-primary mt-0.5" />
-                  <a href={`mailto:${settings.email}`} className="hover:text-primary">{settings.email}</a>
+                  <a href={`mailto:${settings.email}`} className="hover:text-primary">
+                    {settings.email}
+                  </a>
                 </li>
               )}
               {settings?.mobile && (
                 <li className="flex gap-2">
                   <Phone className="w-4 h-4 text-primary mt-0.5" />
-                  <a href={`tel:${settings.mobile}`} className="hover:text-primary">{settings.mobile}</a>
+                  <a href={`tel:${settings.mobile}`} className="hover:text-primary">
+                    {settings.mobile}
+                  </a>
                 </li>
               )}
               {settings?.telephone && (
                 <li className="flex gap-2">
                   <Phone className="w-4 h-4 text-primary mt-0.5" />
-                  <a href={`tel:${settings.telephone}`} className="hover:text-primary">{settings.telephone}</a>
+                  <a href={`tel:${settings.telephone}`} className="hover:text-primary">
+                    {settings.telephone}
+                  </a>
                 </li>
               )}
               {settings?.address && (
@@ -144,35 +185,32 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Facebook Feed */}
+          {/* Facebook Feed (iframe — no SDK, no errors) */}
           <div>
             <h4 className="text-base font-semibold mb-4">Latest from Facebook</h4>
-
-            <div ref={fbRef} className="flex justify-center md:justify-start">
-              {settings?.facebookUrl && (
-                <div
-                  className="fb-page w-full max-w-[380px]"
-                  data-href={settings.facebookUrl}
-                  data-tabs="timeline"
-                  data-width="380"
-                  data-height="480"
-                  data-small-header="false"
-                  data-adapt-container-width="true"
-                  data-hide-cover="false"
-                  data-show-facepile="true"
-                ></div>
-              )}
-            </div>
+            {fbIframeSrc ? (
+              <iframe
+                title="Facebook Page"
+                src={fbIframeSrc}
+                width="380"
+                height="480"
+                style={{ border: "none", overflow: "hidden" }}
+                scrolling="no"
+                frameBorder="0"
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                loading="lazy"
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground">Facebook page not configured.</div>
+            )}
           </div>
-
         </div>
 
-        <div className="mt-10 border-t"></div>
+        <div className="mt-10 border-t" />
 
         <div className="py-6 text-center text-sm text-muted-foreground">
           © {new Date().getFullYear()} {settings?.companyName || "Everest Worldwide Consultancy Pvt. Ltd."} — All Rights Reserved.
         </div>
-
       </div>
     </footer>
   );
