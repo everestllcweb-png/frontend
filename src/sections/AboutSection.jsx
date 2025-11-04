@@ -41,7 +41,7 @@ export function AboutSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           
           {/* Image Side */}
-          {/* <div className="order-2 lg:order-1">
+          <div className="order-2 lg:order-1">
             <div className="relative rounded-md overflow-hidden">
               <img
                 src={logoUrl}
@@ -53,7 +53,7 @@ export function AboutSection() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
             </div>
-          </div> */}
+          </div>
 
           {/* Content Side */}
           <div className="order-1 lg:order-2">
