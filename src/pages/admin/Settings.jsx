@@ -67,7 +67,7 @@ export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // ---- AUTH CHECK (so we don't silently 401 on save) ----
+  // ---- AUTH CHECK ----
   const { data: auth } = useQuery({
     queryKey: [API_BASE, "/api/auth/check"],
     queryFn: async () => {
@@ -104,6 +104,7 @@ export default function Settings() {
       companyName: "",
       footerDescription: "",
       logoUrl: "",
+      logoUrlb: "",
       email: "",
       mobile: "",
       telephone: "",
@@ -115,12 +116,20 @@ export default function Settings() {
     },
   });
 
-  // Logo upload local state
-  const [fileObj, setFileObj] = useState(null);
-  const [uploadPct, setUploadPct] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const fileRef = useRef(null);
+  // Watch both logo URLs for previews
   const logoUrl = watch("logoUrl");
+  const logoUrlb = watch("logoUrlb");
+
+  // Independent upload states for each logo
+  const [fileA, setFileA] = useState(null);
+  const [fileB, setFileB] = useState(null);
+  const [pctA, setPctA] = useState(0);
+  const [pctB, setPctB] = useState(0);
+  const [upA, setUpA] = useState(false);
+  const [upB, setUpB] = useState(false);
+
+  const fileRefA = useRef(null);
+  const fileRefB = useRef(null);
 
   useEffect(() => {
     if (settings) {
@@ -132,7 +141,6 @@ export default function Settings() {
   const updateSettings = useMutation({
     mutationFn: async (data) => {
       const res = await apiRequest("PUT", `${API_BASE}/api/settings`, data);
-      // Some servers may return empty; normalize to object
       return res.json().catch(() => ({}));
     },
     onSuccess: () => {
@@ -160,25 +168,26 @@ export default function Settings() {
     updateSettings.mutate(data);
   };
 
-  async function handleUploadLogo() {
-    if (!fileObj) {
-      toast({ title: "No file selected", description: "Choose a logo first.", variant: "destructive" });
+  // Generic uploader that fills the correct form field
+  async function doUpload(field, file, setPct, setBusy) {
+    if (!file) {
+      toast({ title: "No file selected", description: "Choose an image first.", variant: "destructive" });
       return;
     }
     try {
-      setIsUploading(true);
-      setUploadPct(0);
+      setBusy(true);
+      setPct(0);
       const result = await uploadToCloudinary({
-        file: fileObj,
-        onProgress: setUploadPct,
+        file,
+        onProgress: setPct,
         folder: "settings",
       });
-      setValue("logoUrl", result.secure_url, { shouldDirty: true, shouldValidate: true });
-      toast({ title: "Uploaded", description: "Logo uploaded to Cloudinary" });
+      setValue(field, result.secure_url, { shouldDirty: true, shouldValidate: true });
+      toast({ title: "Uploaded", description: `${field} uploaded to Cloudinary` });
     } catch (err) {
-      toast({ title: "Upload failed", description: err?.message || "Could not upload logo", variant: "destructive" });
+      toast({ title: "Upload failed", description: err?.message || "Could not upload image", variant: "destructive" });
     } finally {
-      setIsUploading(false);
+      setBusy(false);
     }
   }
 
@@ -218,7 +227,7 @@ export default function Settings() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl space-y-8">
           {/* Company Information */}
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-6">
             <h2 className="text-lg font-semibold text-foreground">Company Information</h2>
 
             <div>
@@ -233,18 +242,23 @@ export default function Settings() {
               {errors.footerDescription && <p className="text-sm text-red-600 mt-1">Required</p>}
             </div>
 
-            {/* Logo uploader + manual URL */}
+            {/* Logo A */}
             <div className="space-y-2">
-              <Label>Logo</Label>
+              <Label>Logo (Primary)</Label>
               <div className="flex items-center gap-3">
                 <Input
                   type="file"
                   accept="image/*"
-                  ref={fileRef}
-                  onChange={(e) => setFileObj(e.target.files?.[0] || null)}
+                  ref={fileRefA}
+                  onChange={(e) => setFileA(e.target.files?.[0] || null)}
                 />
-                <Button type="button" variant="secondary" onClick={handleUploadLogo} disabled={!fileObj || isUploading}>
-                  {isUploading ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => doUpload("logoUrl", fileA, setPctA, setUpA)}
+                  disabled={!fileA || upA}
+                >
+                  {upA ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading…
                     </>
@@ -256,13 +270,13 @@ export default function Settings() {
                 </Button>
               </div>
 
-              {isUploading && (
+              {upA && (
                 <div className="w-full h-2 bg-muted rounded">
-                  <div className="h-2 bg-primary rounded transition-all" style={{ width: `${uploadPct}%` }} />
+                  <div className="h-2 bg-primary rounded transition-all" style={{ width: `${pctA}%` }} />
                 </div>
               )}
 
-              {logoUrl && (
+              {logoUrl ? (
                 <div className="mt-2">
                   <img
                     className="max-h-28 object-contain"
@@ -274,7 +288,7 @@ export default function Settings() {
                   />
                   <p className="text-xs text-muted-foreground mt-1 break-all">{logoUrl}</p>
                 </div>
-              )}
+              ) : null}
 
               <div>
                 <Label htmlFor="logoUrl" className="text-xs">Or paste logo URL</Label>
@@ -285,6 +299,66 @@ export default function Settings() {
                   {...register("logoUrl")}
                 />
                 <p className="text-sm text-muted-foreground mt-1">Enter the URL of your logo image</p>
+              </div>
+            </div>
+
+            {/* Logo B */}
+            <div className="space-y-2">
+              <Label>Logo (Secondary)</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  ref={fileRefB}
+                  onChange={(e) => setFileB(e.target.files?.[0] || null)}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => doUpload("logoUrlb", fileB, setPctB, setUpB)}
+                  disabled={!fileB || upB}
+                >
+                  {upB ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading…
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="w-4 h-4 mr-2" /> Upload to Cloudinary
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {upB && (
+                <div className="w-full h-2 bg-muted rounded">
+                  <div className="h-2 bg-primary rounded transition-all" style={{ width: `${pctB}%` }} />
+                </div>
+              )}
+
+              {logoUrlb ? (
+                <div className="mt-2">
+                  <img
+                    className="max-h-28 object-contain"
+                    alt="Secondary logo preview"
+                    src={transformLogo(logoUrlb)}
+                    loading="eager"
+                    decoding="async"
+                    sizes="40vw"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1 break-all">{logoUrlb}</p>
+                </div>
+              ) : null}
+
+              <div>
+                <Label htmlFor="logoUrlb" className="text-xs">Or paste secondary logo URL</Label>
+                <Input
+                  id="logoUrlb"
+                  placeholder="https://example.com/logo2.png"
+                  className="mt-1"
+                  {...register("logoUrlb")}
+                />
+                <p className="text-sm text-muted-foreground mt-1">Enter the URL of your secondary logo image</p>
               </div>
             </div>
           </Card>

@@ -16,8 +16,14 @@ async function fetchJSON(path, { signal } = {}) {
   return res.json();
 }
 
+// Optional: Cloudinary-friendly transform for better perf (no-op for non-Cloudinary)
+function transformImage(url) {
+  if (!url || !url.includes("/upload/")) return url;
+  return url.replace("/upload/", "/upload/f_auto,q_auto,dpr_auto,w_1200/");
+}
+
 export function AboutSection() {
-  // ✅ fetch settings to get logoUrl
+  // ✅ fetch settings to get logoUrlb
   const { data: settings } = useQuery({
     queryKey: [API_BASE, "/api/settings"],
     queryFn: ({ signal }) => fetchJSON("/api/settings", { signal }),
@@ -30,21 +36,22 @@ export function AboutSection() {
     { icon: Globe, text: "Partner with 200+ Top Employers Globally" },
   ];
 
-  // ✅ prefer backend logo; fallback if empty
-  const logoUrl =
-    settings?.logoUrl?.trim() ||
-    "https://via.placeholder.com/600x400?text=Company+Image";
+  // ✅ prefer backend secondary logo; fallback if empty
+  const rawLogoB =
+    (typeof settings?.logoUrlb === "string" ? settings.logoUrlb.trim() : "") ||
+    "https://via.placeholder.com/1200x800?text=Company+Image";
+
+  const logoB = transformImage(rawLogoB);
 
   return (
     <section className="py-16 lg:py-24 bg-card">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          
           {/* Image Side */}
           <div className="order-2 lg:order-1">
             <div className="relative rounded-md overflow-hidden">
               <img
-                src={logoUrl}
+                src={logoB}
                 alt="Company Logo / About Image"
                 className="w-full h-[400px] lg:h-[500px] object-cover"
                 loading="lazy"

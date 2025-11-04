@@ -61,7 +61,7 @@ export default function AboutPage() {
     refetchOnReconnect: false,
   });
 
-  // Settings — to get logoUrl for the big image
+  // Settings — to get logoUrlb for the big image
   const { data: settings } = useQuery({
     queryKey: [API_BASE, "/api/settings"],
     queryFn: ({ signal }) => fetchJSON("/api/settings", { signal }),
@@ -81,10 +81,11 @@ export default function AboutPage() {
     });
   }, [team]);
 
-  // Prefer backend logo; fallback to your current static image
+  // ✅ Prefer secondary logo (logoUrlb) for story image; fallback to primary logo, then a static image
   const storyImageRaw =
-    settings?.logoUrl?.trim() ||
-    "https://commission.europa.eu/sites/default/files/styles/oe_theme_medium_no_crop/public/2022-07/photos-for-europa-page_hr-strategy_03.jpg?itok=RCbYpSRU";
+    (typeof settings?.logoUrlb === "string" && settings.logoUrlb.trim()) ||
+    (typeof settings?.logoUrl === "string" && settings.logoUrl.trim()) ||
+    "https://via.placeholder.com/1200x800?text=Company+Image";
   const storyImage = transformCdn(storyImageRaw, "f_auto,q_auto,dpr_auto,w_1200");
 
   return (
@@ -180,7 +181,7 @@ export default function AboutPage() {
         <section className="py-16 lg:py-24 bg-card">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-12 lg:mb-16">
-              <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
+              <h2 className="text-3xl lg:4xl font-bold text-foreground mb-4">
                 Our Core Values
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
