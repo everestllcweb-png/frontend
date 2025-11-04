@@ -1,7 +1,7 @@
 import Navbar from "../Navbar";
 import Footer from "../Footer";
 import { useQuery } from "@tanstack/react-query";
-import {  Users} from "lucide-react";
+import { GraduationCap, Users} from "lucide-react";
 const API_BASE = import.meta.env.VITE_API_URL || "";
 // Helper: fetch wrapper
 async function fetchJSON(path) {
