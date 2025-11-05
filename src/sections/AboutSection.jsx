@@ -32,7 +32,7 @@ export function AboutSection() {
 
   const highlights = [
     { icon: Award, text: "15+ Years of Excellence " },
-    { icon: Users, text: "100k+ Workers Successfully Placed Worldwide" },
+    { icon: Users, text: "20k+ Workers Successfully Placed Worldwide" },
     { icon: Globe, text: "Partner with 200+ Top Employers Globally" },
   ];
 
