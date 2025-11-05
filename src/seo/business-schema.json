@@ -1,0 +1,21 @@
+{
+  "@context": "https://schema.org",
+  "@type": "EmploymentAgency",
+  "name": "Everest Visas Consulting LLC",
+  "alternateName": "Everest Manpower UAE",
+  "url": "https://www.everestvisasllc.com",
+  "logo": "https://www.everestvisasllc.com/logo.jpg",
+  "description": "Overseas manpower supplier & work visa consultancy for Europe, UAE & GCC.",
+  "areaServed": ["UAE","Nepal","India","GCC","Europe"],
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Business Bay",
+    "addressLocality": "Dubai",
+    "addressCountry": "AE"
+  },
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+9779866573177",
+    "contactType": "customer support"
+  }
+}
