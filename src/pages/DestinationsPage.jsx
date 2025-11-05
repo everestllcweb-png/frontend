@@ -2,6 +2,7 @@ import Navbar from "../Navbar";
 import Footer from "../Footer";
 import { useQuery } from "@tanstack/react-query";
 import { GraduationCap, Users} from "lucide-react";
+import WhatsApp from "../sections/WhatsApp";
 const API_BASE = import.meta.env.VITE_API_URL || "";
 // Helper: fetch wrapper
 async function fetchJSON(path) {
@@ -27,6 +28,7 @@ export default function DestinationsPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <WhatsApp/>
       <main className="pt-16 lg:pt-20">
         {/* Hero Section */}
         <section className="py-20 lg:py-32 bg-gradient-to-br from-primary/10 via-background to-destructive/5">

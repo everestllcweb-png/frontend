@@ -4,6 +4,7 @@ import { HelpCircle, FileText, Phone, Mail } from "lucide-react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
 import { Link } from "wouter";
+import WhatsApp from "../sections/WhatsApp";
 
 export default function OtherPage() {
   const resources = [
@@ -24,6 +25,7 @@ export default function OtherPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <WhatsApp/>
       <main className="pt-16 lg:pt-20">
         {/* Hero Section */}
         <section className="py-20 lg:py-32 bg-gradient-to-br from-primary/10 via-background to-destructive/5">

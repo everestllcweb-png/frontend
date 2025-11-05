@@ -14,6 +14,7 @@ import {
   DialogDescription,
 } from "../ui/dialog";
 import { useMemo, useState } from "react";
+import WhatsApp from "../sections/WhatsApp";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -97,6 +98,7 @@ export default function CoursesPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+      <WhatsApp/>
       <main className="pt-16 lg:pt-20">
         {/* Hero Section */}
         <section className="py-20 lg:py-32 bg-gradient-to-br from-primary/10 via-background to-destructive/5">

@@ -21,6 +21,7 @@ import { useToast } from "../hooks/use-toast";
 import { Calendar, Clock, CheckCircle } from "lucide-react";
 import { useState } from "react";
 
+
 // === NEW: prod-safe API base (works locally and on Render) ===
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -242,6 +243,7 @@ export default function AppointmentPage() {
               </form>
             </Card>
           </div>
+          
         </section>
       </main>
       <Footer />

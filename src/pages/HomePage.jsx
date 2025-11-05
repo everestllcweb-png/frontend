@@ -7,6 +7,7 @@ import { ReviewsSection } from "../sections/ReviewsSection";
 import { BlogsSection } from "../sections/BlogsSection";
 import Navbar from "../Navbar";
 import Footer from "../Footer";
+import WhatsApp from "../sections/WhatsApp";
 
 
 export default function HomePage() {
@@ -20,7 +21,7 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main>
-        
+        <WhatsApp/>
         <AboutSection />
         <CoursesSection />
         <DestinationsSection />
