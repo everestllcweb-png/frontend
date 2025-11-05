@@ -48,7 +48,7 @@ export default function AboutPage() {
 
   const stats = [
     { number: "15+", label: "Years Experience" },
-    { number: "100k+", label: "Workers Placed" },
+    { number: "20k+", label: "Workers Placed" },
     { number: "200+", label: "Partners Worldwide" },
     { number: "30+", label: "Countries Worldwide" },
   ];
